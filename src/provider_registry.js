@@ -13,14 +13,17 @@ export const PROVIDER_REGISTRY = {
     modelsEndpoint: '/models',
     authHeader: 'Authorization',
     authPrefix: 'Bearer ',
+    // OpenRouter returns { data: [{ id, name, pricing }] }
     listParser: (json) => (json.data || []).map(m => ({
       id: m.id,
       name: m.name || m.id,
       contextLength: m.context_length || null,
       pricing: m.pricing || {},
     })),
+    // OpenRouter provides model IDs directly usable as model param
     modelIdField: 'id',
   },
+
   deepseek: {
     name: 'DeepSeek',
     baseUrl: 'https://api.deepseek.com/v1',
@@ -36,6 +39,7 @@ export const PROVIDER_REGISTRY = {
     })),
     modelIdField: 'id',
   },
+
   groq: {
     name: 'Groq',
     baseUrl: 'https://api.groq.com/openai/v1',
@@ -51,21 +55,24 @@ export const PROVIDER_REGISTRY = {
     })),
     modelIdField: 'id',
   },
+
   moonshot: {
     name: 'Moonshot (Kimi)',
     baseUrl: 'https://api.moonshot.ai/v1',
-    supportsModelListing: false,
+    supportsModelListing: false, // Undocumented / limited
     modelsEndpoint: null,
     authHeader: 'Authorization',
     authPrefix: 'Bearer ',
     listParser: null,
     modelIdField: 'id',
+    // Fallback: manual curated list maintained by provider
     fallbackModels: [
       { id: 'moonshot-v1-8k', name: 'Kimi V1 8K', contextLength: 8192 },
       { id: 'moonshot-v1-32k', name: 'Kimi V1 32K', contextLength: 32768 },
       { id: 'moonshot-v1-128k', name: 'Kimi V1 128K', contextLength: 131072 },
     ],
   },
+
   xai: {
     name: 'xAI (Grok)',
     baseUrl: 'https://api.x.ai/v1',
@@ -81,6 +88,7 @@ export const PROVIDER_REGISTRY = {
     })),
     modelIdField: 'id',
   },
+
   openai: {
     name: 'OpenAI',
     baseUrl: 'https://api.openai.com/v1',
@@ -96,12 +104,13 @@ export const PROVIDER_REGISTRY = {
     })),
     modelIdField: 'id',
   },
+
   gemini: {
     name: 'Google Gemini',
     baseUrl: 'https://generativelanguage.googleapis.com/v1beta',
     supportsModelListing: true,
     modelsEndpoint: '/models',
-    authHeader: 'x-goog-api-key',
+    authHeader: 'x-goog-api-key', // Gemini uses query param or this header
     authPrefix: '',
     listParser: (json) => (json.models || []).map(m => ({
       id: m.name.replace('models/', ''),
@@ -113,10 +122,16 @@ export const PROVIDER_REGISTRY = {
   },
 };
 
+/**
+ * Get provider metadata by key.
+ */
 export function getProviderMeta(key) {
   return PROVIDER_REGISTRY[key] || null;
 }
 
+/**
+ * Check if provider supports live model listing.
+ */
 export function supportsModelListing(key) {
   const meta = getProviderMeta(key);
   return meta ? meta.supportsModelListing : false;

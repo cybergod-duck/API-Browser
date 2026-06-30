@@ -7,8 +7,10 @@
  */
 
 import { PROVIDER_CONFIG } from './secure_config.js';
-import { getProviderMeta } from './provider_registry.js';
+import { PROVIDER_REGISTRY, getProviderMeta, supportsModelListing } from './provider_registry.js';
 import { getCatalog, getRecommendedModels, scoreModel } from './model_catalog.js';
+
+// ─── Runtime Key Storage ─────────────────────────────────────────────────
 
 let _runtimeKeys = {};
 
@@ -39,7 +41,7 @@ export function getUserKey(provider) {
 
 export function getKeyStatus() {
   const status = {};
-  for (const [key] of Object.entries(PROVIDER_CONFIG)) {
+  for (const [key, meta] of Object.entries(PROVIDER_REGISTRY)) {
     const hasRuntimeKey = !!_runtimeKeys[key];
     const pConfig = PROVIDER_CONFIG[key];
     const hasConfigKey = !!(pConfig && pConfig.apiKey && !pConfig.apiKey.startsWith('YOUR_'));
@@ -51,6 +53,8 @@ export function getKeyStatus() {
 export function hasAnyKey() {
   return Object.values(getKeyStatus()).some(Boolean);
 }
+
+// ─── Task Type Definitions ───────────────────────────────────────────────
 
 export const TASK_PROFILES = {
   browse: {
@@ -85,6 +89,8 @@ export const TASK_PROFILES = {
   },
 };
 
+// ─── Router State ────────────────────────────────────────────────────────
+
 let sessionState = {
   activeModel: null,
   failureCount: {},
@@ -107,9 +113,12 @@ export function getMode() {
   };
 }
 
+// ─── Dynamic Routing ─────────────────────────────────────────────────────
+
 export async function routeTask(taskType, options = {}) {
   const profile = TASK_PROFILES[taskType] || TASK_PROFILES.browse;
 
+  // Manual mode bypass
   if (sessionState.mode === 'manual' && sessionState.manualSelection) {
     const config = await resolveConfig(sessionState.manualSelection);
     if (config) {
@@ -119,6 +128,7 @@ export async function routeTask(taskType, options = {}) {
     }
   }
 
+  // Get live catalog
   const keys = {};
   for (const [provider, config] of Object.entries(PROVIDER_CONFIG)) {
     if (config.apiKey && !config.apiKey.startsWith('YOUR_')) keys[provider] = config.apiKey;
@@ -126,8 +136,10 @@ export async function routeTask(taskType, options = {}) {
   const catalog = await getCatalog(keys, false);
   const recommended = getRecommendedModels(catalog);
 
+  // Score candidates by task fit
   let candidates = recommended;
   if (options.failureCount > 0) {
+    // On failure, expand to all capable models
     const all = [];
     for (const [provider, models] of Object.entries(catalog)) {
       for (const m of models) {
@@ -138,6 +150,7 @@ export async function routeTask(taskType, options = {}) {
     candidates = all.filter(m => m.tier !== 'limited').sort((a, b) => b.score - a.score);
   }
 
+  // Pick best match for task type
   const best = pickBestForTask(candidates, profile, options);
   if (!best) throw new Error('No suitable model available.');
 
@@ -147,11 +160,13 @@ export async function routeTask(taskType, options = {}) {
   return config;
 }
 
-function pickBestForTask(candidates, profile) {
+function pickBestForTask(candidates, profile, options) {
+  // Prefer models with matching traits
   for (const trait of profile.recommendedTraits) {
     const match = candidates.find(c => c.tags?.includes(trait));
     if (match) return match;
   }
+  // Fallback: highest scored
   return candidates[0] || null;
 }
 
@@ -171,12 +186,14 @@ async function resolveConfig(providerModelKey) {
   const pConfig = PROVIDER_CONFIG[provider];
   if (!pConfig || !pConfig.apiKey || pConfig.apiKey.startsWith('YOUR_')) return null;
 
+  // If modelId specified, use it; otherwise need to discover
   let resolvedModelId = modelId;
   if (!resolvedModelId) {
     const meta = getProviderMeta(provider);
     if (meta?.fallbackModels?.[0]) {
       resolvedModelId = meta.fallbackModels[0].id;
     } else {
+      // Try to discover
       try {
         const { fetchProviderModels } = await import('./model_catalog.js');
         const models = await fetchProviderModels(provider, pConfig.apiKey);

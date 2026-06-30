@@ -1,5 +1,9 @@
 /**
- * onboarding.js — First-run setup wizard with discovery trigger
+ * onboarding.js — First-run setup wizard
+ *
+ * Walks the user through API key entry on fresh install.
+ * Keys are stored in chrome.storage.sync and merged with
+ * the built-in PROVIDER_CONFIG at runtime.
  */
 
 let currentStep = 1;
@@ -8,12 +12,14 @@ const TOTAL_STEPS = 3;
 function showStep(step) {
   document.querySelectorAll('.step-panel').forEach(el => el.classList.remove('active'));
   document.querySelector(`.step-panel[data-step="${step}"]`).classList.add('active');
+
   document.querySelectorAll('.step-dot').forEach((dot, i) => {
     dot.classList.remove('active', 'done');
     const idx = i + 1;
     if (idx === step) dot.classList.add('active');
     else if (idx < step) dot.classList.add('done');
   });
+
   currentStep = step;
 }
 
@@ -39,6 +45,7 @@ window.saveKeys = async function () {
     xai: document.getElementById('key-xai').value.trim(),
   };
 
+  // Filter out empty keys
   const provided = {};
   let hasAny = false;
   for (const [k, v] of Object.entries(keys)) {
@@ -46,12 +53,17 @@ window.saveKeys = async function () {
   }
 
   if (!hasAny) {
-    document.getElementById('key-error').style.display = 'block';
+    const err = document.getElementById('key-error');
+    err.style.display = 'block';
     return;
   }
+
   document.getElementById('key-error').style.display = 'none';
 
+  // Save to chrome.storage
   await chrome.storage.sync.set({ aiBrowseApiKeys: provided });
+
+  // Mark setup complete
   await chrome.storage.sync.set({ aiBrowseSetupDone: true });
 
   showStep(3);
@@ -60,7 +72,9 @@ window.saveKeys = async function () {
 
 window.finishSetup = async function () {
   await chrome.runtime.sendMessage({ type: 'SETUP_COMPLETE' });
+  // Trigger discovery now that keys are saved
   await chrome.runtime.sendMessage({ type: 'DISCOVER_MODELS' });
+  // Open the side panel
   chrome.sidePanel.open();
   window.close();
 };
@@ -93,9 +107,11 @@ function renderModelPreview(keys) {
   }).join('');
 }
 
+// On load, check if already configured
 (async function init() {
   const { aiBrowseSetupDone } = await chrome.storage.sync.get('aiBrowseSetupDone');
   if (aiBrowseSetupDone) {
+    // Already set up — skip to done screen
     const { aiBrowseApiKeys } = await chrome.storage.sync.get('aiBrowseApiKeys');
     showStep(3);
     renderModelPreview(aiBrowseApiKeys || {});

@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AI Browse — Model Router</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div id="app">
+    <header>
+      <h1>AI Browse</h1>
+      <span id="status-dot" class="dot dot-green" title="Active"></span>
+    </header>
+
+    <!-- Mode Toggle -->
+    <section id="mode-section">
+      <label class="toggle-label">
+        <span>Routing Mode</span>
+        <select id="mode-select">
+          <option value="auto">Automatic</option>
+          <option value="manual">Manual</option>
+        </select>
+      </label>
+      <div id="manual-picker" class="hidden">
+        <label class="toggle-label">
+          <span>Model</span>
+          <select id="model-select"></select>
+        </label>
+      </div>
+    </section>
+
+    <!-- Active Model Display -->
+    <section id="active-section">
+      <h2>Active Model</h2>
+      <div id="active-display">—</div>
+      <div id="active-cost" class="cost-badge hidden"></div>
+    </section>
+
+    <!-- Task Quick-Route Buttons -->
+    <section id="tasks-section">
+      <h2>Quick Route</h2>
+      <div id="task-buttons"></div>
+    </section>
+
+    <!-- Current Page Context -->
+    <section id="page-section">
+      <h2>Current Page</h2>
+      <div id="page-title">—</div>
+      <div id="page-url" class="text-xs truncate">—</div>
+    </section>
+
+    <!-- Session History Toggle -->
+    <section id="history-section">
+      <details>
+        <summary>Session History</summary>
+        <div id="history-list"></div>
+      </details>
+    </section>
+
+    <footer>
+      <button id="reset-btn" title="Reset router state">↺ Reset</button>
+      <button id="open-panel-btn" title="Open side panel">☰ Panel</button>
+    </footer>
+  </div>
+  <script src="popup.js" type="module"></script>
+</body>
+</html>
