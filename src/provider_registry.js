@@ -20,7 +20,6 @@ export const PROVIDER_REGISTRY = {
       contextLength: m.context_length || null,
       pricing: m.pricing || {},
     })),
-    // OpenRouter provides model IDs directly usable as model param
     modelIdField: 'id',
   },
 
@@ -58,18 +57,20 @@ export const PROVIDER_REGISTRY = {
 
   moonshot: {
     name: 'Moonshot (Kimi)',
-    baseUrl: 'https://api.moonshot.ai/v1',
-    supportsModelListing: false, // Undocumented / limited
+    baseUrl: 'https://api.moonshot.cn/v1',   // Updated to Kimi K2 endpoint
+    supportsModelListing: false,
     modelsEndpoint: null,
     authHeader: 'Authorization',
     authPrefix: 'Bearer ',
     listParser: null,
     modelIdField: 'id',
-    // Fallback: manual curated list maintained by provider
+    // Kimi K2 model family
     fallbackModels: [
-      { id: 'moonshot-v1-8k', name: 'Kimi V1 8K', contextLength: 8192 },
-      { id: 'moonshot-v1-32k', name: 'Kimi V1 32K', contextLength: 32768 },
-      { id: 'moonshot-v1-128k', name: 'Kimi V1 128K', contextLength: 131072 },
+      { id: 'kimi-k2', name: 'Kimi K2', contextLength: 131072 },
+      { id: 'kimi-k2-instruct', name: 'Kimi K2 Instruct', contextLength: 131072 },
+      { id: 'moonshot-v1-8k', name: 'Kimi V1 8K (legacy)', contextLength: 8192 },
+      { id: 'moonshot-v1-32k', name: 'Kimi V1 32K (legacy)', contextLength: 32768 },
+      { id: 'moonshot-v1-128k', name: 'Kimi V1 128K (legacy)', contextLength: 131072 },
     ],
   },
 
@@ -110,7 +111,7 @@ export const PROVIDER_REGISTRY = {
     baseUrl: 'https://generativelanguage.googleapis.com/v1beta',
     supportsModelListing: true,
     modelsEndpoint: '/models',
-    authHeader: 'x-goog-api-key', // Gemini uses query param or this header
+    authHeader: 'x-goog-api-key',
     authPrefix: '',
     listParser: (json) => (json.models || []).map(m => ({
       id: m.name.replace('models/', ''),

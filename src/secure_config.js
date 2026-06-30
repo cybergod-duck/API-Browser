@@ -12,28 +12,28 @@
 const PROVIDER_CONFIG = {
   deepseek: {
     baseUrl: 'https://api.deepseek.com/v1',
-    apiKey: 'YOUR_DEEPSEEK_API_KEY',         // DeepSeek V4-Flash
-    defaultModel: 'deepseek-chat',
+    apiKey: 'YOUR_DEEPSEEK_API_KEY',
+    defaultModel: 'deepseek-chat',           // DeepSeek V4-Flash
   },
   moonshot: {
-    baseUrl: 'https://api.moonshot.ai/v1',
-    apiKey: 'YOUR_MOONSHOT_API_KEY',         // Kimi K2.6
-    defaultModel: 'moonshot-v1-auto',        // Replace with actual Kimi K2.6 model name from Moonshot API
+    baseUrl: 'https://api.moonshot.cn/v1',   // Kimi K2 endpoint
+    apiKey: 'YOUR_MOONSHOT_API_KEY',
+    defaultModel: 'kimi-k2',                 // Kimi K2 (instruct)
   },
   xai: {
     baseUrl: 'https://api.x.ai/v1',
-    apiKey: 'YOUR_XAI_API_KEY',              // Grok Build 0.1
-    defaultModel: 'grok-build',
+    apiKey: 'YOUR_XAI_API_KEY',
+    defaultModel: 'grok-3',                  // Grok 3 (coding/agentic)
   },
   groq: {
     baseUrl: 'https://api.groq.com/openai/v1',
-    apiKey: 'YOUR_GROQ_API_KEY',             // Groq Llama 3
-    defaultModel: 'llama3-8b-8192',
+    apiKey: 'YOUR_GROQ_API_KEY',
+    defaultModel: 'llama3-8b-8192',          // Groq Llama 3 (fast executor)
   },
   openrouter: {
     baseUrl: 'https://openrouter.ai/api/v1',
-    apiKey: 'YOUR_OPENROUTER_API_KEY',       // Qwen3 Coder — replace with your key
-    defaultModel: 'qwen/qwen3-coder',
+    apiKey: 'YOUR_OPENROUTER_API_KEY',
+    defaultModel: 'qwen/qwen3-coder',        // Qwen3 Coder via OpenRouter
   },
 };
 
