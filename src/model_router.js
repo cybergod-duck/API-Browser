@@ -64,6 +64,30 @@ export function getUserKey(provider) {
   return _runtimeKeys[provider] || null;
 }
 
+/**
+ * Check which providers have valid API keys configured.
+ * This is the single source of truth used by popup, panel, and onboarding.
+ */
+export function getKeyStatus() {
+  const status = {};
+  for (const [key, meta] of Object.entries(MODEL_META)) {
+    const pConfig = PROVIDER_CONFIG[meta.provider];
+    // Check both runtime keys and merged config
+    const hasRuntimeKey = !!_runtimeKeys[meta.provider];
+    const hasConfigKey = !!(pConfig && pConfig.apiKey && !pConfig.apiKey.startsWith('YOUR_'));
+    status[key] = hasRuntimeKey || hasConfigKey;
+  }
+  return status;
+}
+
+/**
+ * Check if any provider has a valid key.
+ */
+export function hasAnyKey() {
+  const status = getKeyStatus();
+  return Object.values(status).some(Boolean);
+}
+
 // ─── Task Type Definitions ───────────────────────────────────────────────
 
 const TASK_PROFILES = {

@@ -6,7 +6,7 @@
  */
 
 import { PROVIDER_CONFIG } from './secure_config.js';
-import { routeTask, getModelConfig, setMode, getMode, recordFailure, getTaskHistory, resetSession, TASK_PROFILES, MODEL_META, loadUserKeys } from './model_router.js';
+import { routeTask, getModelConfig, setMode, getMode, recordFailure, getTaskHistory, resetSession, TASK_PROFILES, MODEL_META, loadUserKeys, getKeyStatus } from './model_router.js';
 
 // ─── Message Handlers ────────────────────────────────────────────────────
 
@@ -31,15 +31,8 @@ const MESSAGE_HANDLERS = {
     return { ok: true };
   },
 
-  /** Get which providers have keys configured */
-  GET_KEY_STATUS: () => {
-    const status = {};
-    for (const [key, meta] of Object.entries(MODEL_META)) {
-      const pConfig = PROVIDER_CONFIG[meta.provider];
-      status[key] = !!(pConfig && pConfig.apiKey && !pConfig.apiKey.startsWith('YOUR_'));
-    }
-    return status;
-  },
+  /** Get which providers have keys configured — single source of truth */
+  GET_KEY_STATUS: () => getKeyStatus(),
 
   /** Get the current routing mode and active model */
   GET_MODE: () => getMode(),
