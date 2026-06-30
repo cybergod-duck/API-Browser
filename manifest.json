@@ -1,21 +1,22 @@
 {
   "manifest_version": 3,
   "name": "AI Browse — Model Router",
-  "version": "1.0.0",
-  "description": "Route browser-automation tasks to the optimal model: DeepSeek V4-Flash (default), Kimi K2.6, Grok Build, Groq Llama 3, or Qwen3 Coder.",
+  "version": "1.1.0",
+  "description": "Live model discovery and intelligent routing for browser automation. Auto-discovers models from your providers and scores them for automation suitability.",
   "permissions": [
     "storage",
     "activeTab",
     "scripting",
     "sidePanel"
   ],
-  "options_page": "src/onboarding.html",
   "host_permissions": [
     "https://api.deepseek.com/*",
     "https://api.moonshot.ai/*",
     "https://api.x.ai/*",
     "https://api.groq.com/*",
-    "https://openrouter.ai/api/*"
+    "https://openrouter.ai/api/*",
+    "https://api.openai.com/*",
+    "https://generativelanguage.googleapis.com/*"
   ],
   "background": {
     "service_worker": "src/background.js",

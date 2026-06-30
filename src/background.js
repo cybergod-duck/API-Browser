@@ -1,49 +1,31 @@
 /**
  * background.js — Service Worker
- *
- * Handles message routing between popup, panel, and content scripts.
- * Manages API calls to model providers and communication with the active tab.
  */
 
 import { PROVIDER_CONFIG } from './secure_config.js';
 import { routeTask, getModelConfig, setMode, getMode, recordFailure, getTaskHistory, resetSession, TASK_PROFILES, MODEL_META, loadUserKeys, getKeyStatus } from './model_router.js';
-
-// ─── Message Handlers ────────────────────────────────────────────────────
+import { getCatalog, getRecommendedModels, getAllScoredModels, clearCatalogCache } from './model_catalog.js';
 
 const MESSAGE_HANDLERS = {
-  /** Check if the user has completed onboarding */
   GET_SETUP_STATUS: async () => {
     const { aiBrowseSetupDone } = await chrome.storage.sync.get('aiBrowseSetupDone');
     return { setupDone: !!aiBrowseSetupDone };
   },
-
-  /** Mark setup as complete (called by onboarding wizard) */
   SETUP_COMPLETE: async () => {
     await chrome.storage.sync.set({ aiBrowseSetupDone: true });
     return { ok: true };
   },
-
-  /** Save or update a single API key */
   SAVE_API_KEY: async (msg) => {
-    const { provider, apiKey } = msg;
     const { setUserKey } = await import('./model_router.js');
-    await setUserKey(provider, apiKey);
+    await setUserKey(msg.provider, msg.apiKey);
     return { ok: true };
   },
-
-  /** Get which providers have keys configured — single source of truth */
   GET_KEY_STATUS: () => getKeyStatus(),
-
-  /** Get the current routing mode and active model */
   GET_MODE: () => getMode(),
-
-  /** Set routing mode: { mode: 'auto'|'manual', modelKey?: string } */
   SET_MODE: (msg) => {
     setMode(msg.mode, msg.modelKey || null);
     return { ok: true, mode: getMode() };
   },
-
-  /** Route a task and return the API config for the chosen model */
   ROUTE_TASK: (msg) => {
     try {
       const config = routeTask(msg.taskType, msg.options || {});
@@ -52,8 +34,6 @@ const MESSAGE_HANDLERS = {
       return { ok: false, error: err.message };
     }
   },
-
-  /** Get all available task profiles and model metadata */
   GET_ROUTER_INFO: () => ({
     profiles: TASK_PROFILES,
     models: Object.fromEntries(
@@ -61,27 +41,45 @@ const MESSAGE_HANDLERS = {
     ),
     mode: getMode(),
   }),
-
-  /** Make an API call to a model provider (used by panel/popup for direct chat) */
   CHAT_COMPLETION: async (msg) => {
     const { provider, messages, options } = msg;
     return handleChatCompletion(provider, messages, options);
   },
-
-  /** Record a model failure (triggers escalation) */
   RECORD_FAILURE: (msg) => {
     recordFailure(msg.providerKey);
     return { ok: true };
   },
-
-  /** Get task history */
-  GET_HISTORY: () => {
-    return getTaskHistory();
-  },
-
-  /** Reset router session state */
+  GET_HISTORY: () => getTaskHistory(),
   RESET_SESSION: () => {
     resetSession();
+    return { ok: true };
+  },
+  DISCOVER_MODELS: async () => {
+    const keys = {};
+    for (const [provider, config] of Object.entries(PROVIDER_CONFIG)) {
+      if (config.apiKey && !config.apiKey.startsWith('YOUR_')) keys[provider] = config.apiKey;
+    }
+    const catalog = await getCatalog(keys, true);
+    return { ok: true, catalog, recommended: getRecommendedModels(catalog) };
+  },
+  GET_CATALOG: async () => {
+    const keys = {};
+    for (const [provider, config] of Object.entries(PROVIDER_CONFIG)) {
+      if (config.apiKey && !config.apiKey.startsWith('YOUR_')) keys[provider] = config.apiKey;
+    }
+    const catalog = await getCatalog(keys, false);
+    return { ok: true, catalog, recommended: getRecommendedModels(catalog) };
+  },
+  GET_ALL_MODELS: async () => {
+    const keys = {};
+    for (const [provider, config] of Object.entries(PROVIDER_CONFIG)) {
+      if (config.apiKey && !config.apiKey.startsWith('YOUR_')) keys[provider] = config.apiKey;
+    }
+    const catalog = await getCatalog(keys, false);
+    return { ok: true, models: getAllScoredModels(catalog) };
+  },
+  CLEAR_CATALOG: async () => {
+    await clearCatalogCache();
     return { ok: true };
   },
 };
@@ -92,17 +90,14 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     sendResponse({ ok: false, error: `Unknown message type: ${msg.type}` });
     return false;
   }
-
   const result = handler(msg);
   if (result instanceof Promise) {
     result.then(sendResponse).catch((err) => sendResponse({ ok: false, error: err.message }));
-    return true; // keep channel open for async
+    return true;
   }
   sendResponse(result);
   return false;
 });
-
-// ─── Chat Completion Helper ──────────────────────────────────────────────
 
 async function handleChatCompletion(provider, messages, options = {}) {
   let config;
@@ -113,9 +108,7 @@ async function handleChatCompletion(provider, messages, options = {}) {
     const routed = routeTask(taskType, options);
     config = getModelConfig(routed.provider);
   }
-  if (!config) {
-    return { ok: false, error: 'No provider configured. Check API keys in secure_config.js.' };
-  }
+  if (!config) return { ok: false, error: 'No provider configured.' };
 
   const body = {
     model: config.model,
@@ -124,15 +117,12 @@ async function handleChatCompletion(provider, messages, options = {}) {
     max_tokens: options.max_tokens ?? 4096,
     stream: options.stream ?? false,
   };
-
   if (options.response_format) body.response_format = options.response_format;
 
   const headers = {
     'Content-Type': 'application/json',
     'Authorization': `Bearer ${config.apiKey}`,
   };
-
-  // OpenRouter requires an additional header
   if (config.provider === 'openrouter') {
     headers['HTTP-Referer'] = 'https://aibrowse.extension';
     headers['X-Title'] = 'AI Browse';
@@ -144,12 +134,7 @@ async function handleChatCompletion(provider, messages, options = {}) {
       headers,
       body: JSON.stringify(body),
     });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      return { ok: false, error: `API error ${response.status}: ${errorText}` };
-    }
-
+    if (!response.ok) return { ok: false, error: `API error ${response.status}: ${await response.text()}` };
     const data = await response.json();
     return { ok: true, data, model: config.displayName };
   } catch (err) {
@@ -157,15 +142,6 @@ async function handleChatCompletion(provider, messages, options = {}) {
   }
 }
 
-// ─── Side Panel Open on Action Click ─────────────────────────────────────
-
-chrome.sidePanel
-  .setPanelBehavior({ openPanelOnActionClick: true })
-  .catch(() => {});
-
-// ─── Boot: Load saved keys from storage ──────────────────────────────────
-loadUserKeys().then(() => {
-  console.log('[AI Browse] User API keys loaded from storage.');
-});
-
+chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true }).catch(() => {});
+loadUserKeys().then(() => console.log('[AI Browse] Keys loaded.'));
 console.log('[AI Browse] Background service worker loaded.');
