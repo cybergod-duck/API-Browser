@@ -1,14 +1,8 @@
 /**
- * popup.js — Model Router Popup Logic
- *
- * Handles the popup UI: mode toggling, manual model selection,
- * task quick-routing, and session status display.
+ * popup.js — Model Router Popup with Live Catalog
  */
 
 const $ = (sel) => document.querySelector(sel);
-const $$ = (sel) => document.querySelectorAll(sel);
-
-// ─── DOM References ──────────────────────────────────────────────────────
 
 const modeSelect = $('#mode-select');
 const manualPicker = $('#manual-picker');
@@ -23,58 +17,62 @@ const resetBtn = $('#reset-btn');
 const openPanelBtn = $('#open-panel-btn');
 const statusDot = $('#status-dot');
 
-// ─── Initialization ──────────────────────────────────────────────────────
-
 let routerInfo = null;
 
 async function init() {
-  // Check if onboarding is needed
   const { setupDone } = await chrome.runtime.sendMessage({ type: 'GET_SETUP_STATUS' });
   const keyStatus = await chrome.runtime.sendMessage({ type: 'GET_KEY_STATUS' });
   const hasAnyKey = Object.values(keyStatus || {}).some(Boolean);
 
   if (!setupDone || !hasAnyKey) {
-    // Redirect to onboarding wizard
     chrome.tabs.create({ url: chrome.runtime.getURL('src/onboarding.html') });
     window.close();
     return;
   }
 
   await loadRouterInfo();
-  populateModelSelect();
+  await loadModelCatalog();
   populateTaskButtons();
   updateActiveDisplay();
   updatePageInfo();
   updateHistory();
 
-  // Event listeners
   modeSelect.addEventListener('change', onModeChange);
   modelSelect.addEventListener('change', onModelChange);
   resetBtn.addEventListener('click', onReset);
   openPanelBtn.addEventListener('click', onOpenPanel);
 }
 
-async function loadRouterInfo() {
-  const resp = await chrome.runtime.sendMessage({ type: 'GET_ROUTER_INFO' });
-  routerInfo = resp;
+async function loadModelCatalog() {
+  const resp = await chrome.runtime.sendMessage({ type: 'GET_CATALOG' });
+  if (resp.ok && resp.recommended?.length > 0) {
+    populateModelSelectFromCatalog(resp.recommended);
+  } else {
+    const discover = await chrome.runtime.sendMessage({ type: 'DISCOVER_MODELS' });
+    if (discover.ok && discover.recommended) {
+      populateModelSelectFromCatalog(discover.recommended);
+    }
+  }
 }
 
-// ─── Model Select ────────────────────────────────────────────────────────
+async function loadRouterInfo() {
+  routerInfo = await chrome.runtime.sendMessage({ type: 'GET_ROUTER_INFO' });
+}
 
-function populateModelSelect() {
+function populateModelSelectFromCatalog(recommended) {
   modelSelect.innerHTML = '';
-  for (const [key, meta] of Object.entries(routerInfo.models)) {
+  for (const model of recommended) {
     const opt = document.createElement('option');
-    opt.value = key;
-    opt.textContent = `${meta.displayName} (${meta.costPer1KTokens}c/k)`;
+    opt.value = `${model.provider}:${model.id}`;
+    const icon = model.tier === 'recommended' ? '⭐' : '✓';
+    const ctx = model.contextLength ? `(${(model.contextLength/1000).toFixed(0)}k ctx)` : '';
+    opt.textContent = `${icon} ${model.name} ${ctx}`;
     modelSelect.appendChild(opt);
   }
-  if (routerInfo.mode.mode === 'manual') {
-    modelSelect.value = routerInfo.mode.selected || 'deepseek';
+  if (routerInfo?.mode?.mode === 'manual' && routerInfo.mode.selected) {
+    modelSelect.value = routerInfo.mode.selected;
   }
 }
-
-// ─── Task Buttons ────────────────────────────────────────────────────────
 
 function populateTaskButtons() {
   taskButtons.innerHTML = '';
@@ -89,14 +87,10 @@ function populateTaskButtons() {
   }
 }
 
-// ─── Display Updates ─────────────────────────────────────────────────────
-
 function updateActiveDisplay() {
-  if (routerInfo.mode.active && routerInfo.models[routerInfo.mode.active]) {
-    const meta = routerInfo.models[routerInfo.mode.active];
-    activeDisplay.textContent = meta.displayName;
-    activeCost.textContent = `$${meta.costPer1KTokens.toFixed(5)}/1K tokens`;
-    activeCost.classList.remove('hidden');
+  if (routerInfo?.mode?.active) {
+    activeDisplay.textContent = routerInfo.mode.active;
+    activeCost.classList.add('hidden');
     statusDot.className = 'dot dot-green';
   } else {
     activeDisplay.textContent = 'Waiting for task...';
@@ -135,17 +129,11 @@ async function updateHistory() {
   historyList.appendChild(list);
 }
 
-// ─── Event Handlers ──────────────────────────────────────────────────────
-
 async function onModeChange() {
   const mode = modeSelect.value;
   manualPicker.classList.toggle('hidden', mode !== 'manual');
   if (mode === 'manual') {
-    await chrome.runtime.sendMessage({
-      type: 'SET_MODE',
-      mode: 'manual',
-      modelKey: modelSelect.value,
-    });
+    await chrome.runtime.sendMessage({ type: 'SET_MODE', mode: 'manual', modelKey: modelSelect.value });
   } else {
     await chrome.runtime.sendMessage({ type: 'SET_MODE', mode: 'auto' });
   }
@@ -155,22 +143,14 @@ async function onModeChange() {
 
 async function onModelChange() {
   if (modeSelect.value === 'manual') {
-    await chrome.runtime.sendMessage({
-      type: 'SET_MODE',
-      mode: 'manual',
-      modelKey: modelSelect.value,
-    });
+    await chrome.runtime.sendMessage({ type: 'SET_MODE', mode: 'manual', modelKey: modelSelect.value });
     await loadRouterInfo();
     updateActiveDisplay();
   }
 }
 
 async function onQuickRoute(taskType) {
-  const resp = await chrome.runtime.sendMessage({
-    type: 'ROUTE_TASK',
-    taskType,
-    options: {},
-  });
+  const resp = await chrome.runtime.sendMessage({ type: 'ROUTE_TASK', taskType, options: {} });
   if (resp.ok) {
     await loadRouterInfo();
     updateActiveDisplay();
@@ -192,11 +172,7 @@ function onOpenPanel() {
   window.close();
 }
 
-// ─── Boot ────────────────────────────────────────────────────────────────
-
 document.addEventListener('DOMContentLoaded', init);
-
-// Refresh periodic
 setInterval(async () => {
   await loadRouterInfo();
   updateActiveDisplay();
